@@ -14,6 +14,131 @@ namespace WindowsFormsApp1
 		public List<ArrivalNode> ArrivalNodes = new List<ArrivalNode>();
         public List<DepartureNode> DepartureNodes = new List<DepartureNode>();
 
+        public static Graph THINGS()
+        {
+            /*
+     Sizes
+    - EC3: 80
+    - EC4: 110
+    - SNG-3: 70
+    - SNG-4: 90
+    - SNG-5: 110
+    In:
+    - 0:00:00, EC3(C), EC3(C)
+    - 0:05:00,  SNG-4
+    - 0:12:00,  EC3, EC4
+    - 0:30:00,  EC4
+    - 1:00:00,  SNG-3, SNG-3
+    - 1:10:00,  SNG-5
+    Out:
+    - 0:20:00,  EC3
+    - 0:25:00,  SNG-4
+    - 0:29:00,  EC4, EC3
+    - 0:45:00,  EC3, EC4
+    - 1:55:00,  SNG-5, SNG-3
+    - 2:10:00,  SNG-3
+
+    Cleaning (C):
+    - EC3: 32
+    - EC4: 47
+    - SNG-3: 27
+    - SNG-4: 35
+    - SNG-5: 42
+
+    Insepction (I):
+    - EC3: 32
+    - EC4: 47
+    - SNG-3: 27
+    - SNG-4: 35
+    - SNG-5: 42
+ */
+            var graph = new Graph();
+
+            Func<int, int> hours = (int h) => h * 3600;
+            Func<int, int> minutes = (int m) => m * 60;
+            Func<int, int> seconds = (int s) => s;
+
+            Func<int, int, int> track2secs = (int t, int s) => t * 60 + s * 30;
+            Func<int, int> turnaround2secs = (int c) => c * 30;
+
+            /*
+             *  - 0:00:00, EC3(C), EC3(C)
+                - 0:05:00,  SNG4
+                - 0:12:00,  EC3, EC4
+                - 0:30:00,  EC4
+                - 1:00:00,  SNG3, SNG3
+                - 1:10:00,  SNG5
+            */
+            var ar1 = new ArrivalNode("(1,2)", 0);
+            var ar2 = new ArrivalNode("(3)", minutes(5));
+            var ar3 = new ArrivalNode("(4, 5)", minutes(12));
+            var ar4 = new ArrivalNode("(6)", minutes(30));
+            var ar5 = new ArrivalNode("(7, 8)", hours(1));
+            var ar6 = new ArrivalNode("(9)", hours(1) + minutes(10));
+
+            /*
+             * Out:
+                - 0:50:00,  EC3
+                - 0:25:00,  SNG-4
+                - 0:29:00,  EC4, EC3
+                - 0:45:00,  EC3, EC4
+                - 1:55:00,  SNG-5, SNG-3
+                - 2:10:00,  SNG-3
+            */
+            var dep1 = new DepartureNode("(1)", minutes(60));
+            var dep2 = new DepartureNode("(3)", minutes(25));
+            var dep3 = new DepartureNode("(5,2)", minutes(69));
+            var dep4 = new DepartureNode("(4, 6)", minutes(45));
+            var dep5 = new DepartureNode("(9, 7)", hours(1) + minutes(55));
+            var dep6 = new DepartureNode("(8)", hours(2) + minutes(10));
+
+
+            {
+                Node m12P1 = new MovementNode("(1, 2) to P1", track2secs(2, 1));
+                Node s12 = new SplitNode("(1, 2) -> (1), (2)", minutes(2) + 30);
+                Node m1p7 = new MovementNode("(1) to P7", track2secs(3, 2));
+                Node service1p7 = new ServiceNode("(1) insepction", minutes(32));
+                Node service2p7 = new ServiceNode("(1) insepction", minutes(32));
+                Node m2p7 = new MovementNode("(2) to P7", track2secs(3, 2));
+                ar1.AddSuccessor(m12P1);
+                
+                m12P1 += s12;
+                s12 += m1p7;
+                s12 += m2p7;
+                m1p7 += m2p7;
+
+                m1p7 += service1p7;
+                m2p7 += service2p7;
+
+                Node m1p4 = new MovementNode("(1) to P4", track2secs(5, 4));
+                Node m2p4 = new MovementNode("(2) to P4", track2secs(5, 4));
+
+                service1p7 += m1p4;
+                service2p7 += m2p4;
+
+                m1p4.AddSuccessor(dep1);
+                m2p4.AddSuccessor(dep6);
+            }
+
+            graph.ArrivalNodes.Add(ar1);
+            graph.ArrivalNodes.Add(ar2);
+            graph.ArrivalNodes.Add(ar3);
+            graph.ArrivalNodes.Add(ar4);
+            graph.ArrivalNodes.Add(ar5);
+            graph.ArrivalNodes.Add(ar6);
+
+            graph.DepartureNodes.Add(dep1);
+            graph.DepartureNodes.Add(dep2);
+            graph.DepartureNodes.Add(dep3);
+            graph.DepartureNodes.Add(dep4);
+            graph.DepartureNodes.Add(dep5);
+            graph.DepartureNodes.Add(dep6);
+
+            graph.Propagate();
+
+            return graph;
+
+        }
         public static Graph Create()
         {
 
@@ -105,6 +230,7 @@ namespace WindowsFormsApp1
             m8a.AddSuccessor(m8b);
             m8b.AddSuccessor(m8c);
             m8c.AddSuccessor(dep2);
+            
 
 
 
@@ -167,10 +293,10 @@ namespace WindowsFormsApp1
 		}
 	}
 
-	abstract class Node
-	{
-		public List<Node> Successors = new List<Node>();
-		public List<Node> Predecessors = new List<Node>();
+    abstract class Node
+    {
+        public List<Node> Successors = new List<Node>();
+        public List<Node> Predecessors = new List<Node>();
 
         private float _start = 0;
         private float _end = float.MaxValue;
@@ -186,19 +312,24 @@ namespace WindowsFormsApp1
         }
 
         protected Node(int maxIn, int maxOut, string name)
-		{
-			this.MaxIn= maxIn;
-			this.MaxOut = maxOut;
-			this.Name = name;
-		}
+        {
+            this.MaxIn = maxIn;
+            this.MaxOut = maxOut;
+            this.Name = name;
+        }
 
-		public void AddSuccessor(Node n)
-		{
-			//Trace.Assert(this.Successors.Count < MaxOut, $"Node: {Name} already contains max output connection: {MaxOut}");
-			//Trace.Assert(n.Predecessors.Count < n.MaxIn, $"Node: {n.Name} already contains max input connection: {n.MaxIn}");
-			this.Successors.Add(n);
-			n.Predecessors.Add(this);
-		}
+        public void AddSuccessor(Node n)
+        {
+            //Trace.Assert(this.Successors.Count < MaxOut, $"Node: {Name} already contains max output connection: {MaxOut}");
+            //Trace.Assert(n.Predecessors.Count < n.MaxIn, $"Node: {n.Name} already contains max input connection: {n.MaxIn}");
+            this.Successors.Add(n);
+            n.Predecessors.Add(this);
+        }
+
+        public static Node operator +(Node a, Node b) {
+            a.AddSuccessor(b);
+            return a;
+        }
 		
 
 		public abstract void AdjustStartTimes(float start, bool stick = false);
@@ -417,5 +548,5 @@ namespace WindowsFormsApp1
             .Build();
         */
 
+        }
     }
-}
